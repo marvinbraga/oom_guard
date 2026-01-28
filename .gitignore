@@ -1,1 +1,25 @@
+# Rust build artifacts
 /target
+Cargo.lock
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.backup
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Release builds
+release/
+
+# Test files
+*.tmp
+*.test
