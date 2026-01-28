@@ -45,12 +45,14 @@ impl NotificationManager {
         &self,
         pid: i32,
         name: &str,
+        cmdline: &str,
+        uid: u32,
         rss_kb: u64,
         score: i32,
     ) -> Result<()> {
         if let Some(script) = &self.pre_kill_script {
             info!("Executing pre-kill script: {script} for process {pid} ({name})");
-            if let Err(e) = self.execute_script(script, pid, name, rss_kb, score) {
+            if let Err(e) = self.execute_script(script, pid, name, cmdline, uid, rss_kb, score) {
                 error!("Failed to execute pre-kill script: {e}");
             }
         }
@@ -61,13 +63,15 @@ impl NotificationManager {
         &self,
         pid: i32,
         name: &str,
+        cmdline: &str,
+        uid: u32,
         rss_kb: u64,
         score: i32,
     ) -> Result<()> {
         // Execute post-kill script
         if let Some(script) = &self.post_kill_script {
             info!("Executing post-kill script: {script} for process {pid} ({name})");
-            if let Err(e) = self.execute_script(script, pid, name, rss_kb, score) {
+            if let Err(e) = self.execute_script(script, pid, name, cmdline, uid, rss_kb, score) {
                 error!("Failed to execute post-kill script: {e}");
             }
         }
@@ -88,19 +92,25 @@ impl NotificationManager {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_script(
         &self,
         script_path: &str,
         pid: i32,
         name: &str,
+        cmdline: &str,
+        uid: u32,
         rss_kb: u64,
         score: i32,
     ) -> Result<()> {
         let safe_name = sanitize_env_value(name);
+        let safe_cmdline = sanitize_env_value(cmdline);
 
         let output = Command::new(script_path)
             .env("OOM_GUARD_PID", pid.to_string())
             .env("OOM_GUARD_NAME", &safe_name)
+            .env("OOM_GUARD_CMDLINE", &safe_cmdline)
+            .env("OOM_GUARD_UID", uid.to_string())
             .env("OOM_GUARD_RSS", rss_kb.to_string())
             .env("OOM_GUARD_SCORE", score.to_string())
             .output()?;

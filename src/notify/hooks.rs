@@ -113,6 +113,8 @@ impl HookValidator {
 /// Environment variables passed to hook scripts:
 /// - OOM_GUARD_PID: Process ID of the killed process
 /// - OOM_GUARD_NAME: Name of the killed process
+/// - OOM_GUARD_CMDLINE: Command line of the killed process
+/// - OOM_GUARD_UID: User ID of the process owner
 /// - OOM_GUARD_RSS: Resident Set Size in KiB
 /// - OOM_GUARD_SCORE: OOM score of the process
 pub struct HookEnvironment;
@@ -122,6 +124,8 @@ impl HookEnvironment {
         vec![
             "OOM_GUARD_PID",
             "OOM_GUARD_NAME",
+            "OOM_GUARD_CMDLINE",
+            "OOM_GUARD_UID",
             "OOM_GUARD_RSS",
             "OOM_GUARD_SCORE",
         ]
@@ -131,6 +135,8 @@ impl HookEnvironment {
         "Hook scripts receive the following environment variables:\n\
              - OOM_GUARD_PID: Process ID of the killed process\n\
              - OOM_GUARD_NAME: Name of the killed process\n\
+             - OOM_GUARD_CMDLINE: Command line of the killed process\n\
+             - OOM_GUARD_UID: User ID of the process owner\n\
              - OOM_GUARD_RSS: Resident Set Size in KiB\n\
              - OOM_GUARD_SCORE: OOM score of the process"
             .to_string()
@@ -186,9 +192,11 @@ mod tests {
     #[test]
     fn test_hook_environment_variables() {
         let vars = HookEnvironment::get_variable_names();
-        assert_eq!(vars.len(), 4);
+        assert_eq!(vars.len(), 6);
         assert!(vars.contains(&"OOM_GUARD_PID"));
         assert!(vars.contains(&"OOM_GUARD_NAME"));
+        assert!(vars.contains(&"OOM_GUARD_CMDLINE"));
+        assert!(vars.contains(&"OOM_GUARD_UID"));
         assert!(vars.contains(&"OOM_GUARD_RSS"));
         assert!(vars.contains(&"OOM_GUARD_SCORE"));
     }
@@ -198,6 +206,8 @@ mod tests {
         let desc = HookEnvironment::describe();
         assert!(desc.contains("OOM_GUARD_PID"));
         assert!(desc.contains("OOM_GUARD_NAME"));
+        assert!(desc.contains("OOM_GUARD_CMDLINE"));
+        assert!(desc.contains("OOM_GUARD_UID"));
         assert!(desc.contains("OOM_GUARD_RSS"));
         assert!(desc.contains("OOM_GUARD_SCORE"));
     }

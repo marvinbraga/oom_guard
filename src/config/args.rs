@@ -86,6 +86,10 @@ pub struct Args {
     /// Ignore processes owned by root user
     #[arg(long = "ignore-root-user")]
     pub ignore_root_user: bool,
+
+    /// Use syslog instead of stdout/stderr for logging
+    #[arg(long = "syslog")]
+    pub syslog: bool,
 }
 
 impl Args {

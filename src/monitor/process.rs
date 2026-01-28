@@ -12,7 +12,10 @@ pub struct ProcessInfo {
     pub cmdline: String,
     pub rss_kb: u64,
     pub oom_score: i32,
+    pub oom_score_adj: i32,
     pub uid: u32,
+    pub state: char,
+    pub is_zombie: bool,
 }
 
 impl ProcessInfo {
@@ -29,8 +32,15 @@ impl ProcessInfo {
         // Get OOM score
         let oom_score = process.oom_score().unwrap_or(0);
 
+        // Get OOM score adj from /proc/[pid]/oom_score_adj
+        let oom_score_adj = Self::read_oom_score_adj(pid);
+
         // Get UID
         let uid = status.ruid;
+
+        // Get process state from stat (first char of state field)
+        let state = stat.state;
+        let is_zombie = state == 'Z';
 
         // Get command line
         let cmdline = process.cmdline().unwrap_or_default().join(" ");
@@ -47,8 +57,20 @@ impl ProcessInfo {
             cmdline,
             rss_kb,
             oom_score: oom_score as i32,
+            oom_score_adj,
             uid,
+            state,
+            is_zombie,
         })
+    }
+
+    /// Read oom_score_adj from /proc/[pid]/oom_score_adj
+    fn read_oom_score_adj(pid: i32) -> i32 {
+        let path = format!("/proc/{pid}/oom_score_adj");
+        fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| s.trim().parse::<i32>().ok())
+            .unwrap_or(0)
     }
 
     /// Get all processes on the system
@@ -76,8 +98,8 @@ impl std::fmt::Display for ProcessInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "PID {} ({}): {} KiB, OOM score {}",
-            self.pid, self.name, self.rss_kb, self.oom_score
+            "PID {} ({}): {} KiB, OOM score {}, adj {}, state {}",
+            self.pid, self.name, self.rss_kb, self.oom_score, self.oom_score_adj, self.state
         )
     }
 }

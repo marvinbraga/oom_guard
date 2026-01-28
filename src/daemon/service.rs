@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::killer::{kill_process, KillInfo, KillStrategy};
 use crate::monitor::{MemInfo, ProcessInfo};
+use crate::notify::NotificationManager;
 use crate::sanitize_for_log;
 use anyhow::{anyhow, Context, Result};
 use nix::libc::{setpriority, PRIO_PROCESS};
@@ -42,6 +43,7 @@ fn set_daemon_priority(priority: i32) -> Result<()> {
 /// Daemon service that monitors memory and kills processes
 pub struct DaemonService {
     config: Config,
+    notification_manager: NotificationManager,
     last_report: Instant,
     last_kill: Option<Instant>,
     running: Arc<AtomicBool>,
@@ -50,8 +52,14 @@ pub struct DaemonService {
 impl DaemonService {
     /// Create a new daemon service
     pub fn new(config: Config) -> Self {
+        let notification_manager = NotificationManager::new(
+            config.notify_dbus,
+            config.pre_kill_script.clone(),
+            config.post_kill_script.clone(),
+        );
         Self {
             config,
+            notification_manager,
             last_report: Instant::now(),
             last_kill: None,
             running: Arc::new(AtomicBool::new(false)),
@@ -82,8 +90,18 @@ impl DaemonService {
         self.setup_signal_handlers()?;
 
         while self.running.load(Ordering::SeqCst) {
+            // Read memory info once per iteration
+            let meminfo = match MemInfo::read() {
+                Ok(m) => m,
+                Err(e) => {
+                    log::error!("Failed to read memory info: {e}");
+                    std::thread::sleep(self.config.check_interval);
+                    continue;
+                }
+            };
+
             // Check memory and act if needed
-            if let Err(e) = self.check_and_act() {
+            if let Err(e) = self.check_and_act_with_meminfo(&meminfo) {
                 log::error!("Error in main loop: {e}");
             }
 
@@ -93,8 +111,14 @@ impl DaemonService {
                 self.last_report = Instant::now();
             }
 
-            // Sleep for the configured interval
-            std::thread::sleep(self.config.check_interval);
+            // Use adaptive sleep or fixed interval based on configuration
+            let sleep_duration = if self.config.adaptive_sleep {
+                self.calculate_adaptive_sleep(&meminfo)
+            } else {
+                self.config.check_interval
+            };
+            log::trace!("Sleeping for {}ms", sleep_duration.as_millis());
+            std::thread::sleep(sleep_duration);
         }
 
         log::info!("OOM Guard daemon shutting down gracefully");
@@ -117,6 +141,7 @@ impl DaemonService {
     }
 
     /// Print startup information
+    #[allow(clippy::cognitive_complexity)]
     fn print_startup_info(&self) -> Result<()> {
         let meminfo = MemInfo::read()?;
 
@@ -183,20 +208,25 @@ impl DaemonService {
             log::info!("Daemon priority: {priority}");
         }
 
-        log::info!(
-            "Monitoring interval: {}s, report interval: {}s",
-            self.config.check_interval.as_secs(),
-            self.config.report_interval.as_secs()
-        );
+        if self.config.adaptive_sleep {
+            log::info!(
+                "Monitoring: adaptive sleep (100-1000ms), report interval: {}s",
+                self.config.report_interval.as_secs()
+            );
+        } else {
+            log::info!(
+                "Monitoring interval: {}s, report interval: {}s",
+                self.config.check_interval.as_secs(),
+                self.config.report_interval.as_secs()
+            );
+        }
         log::info!("==========================================");
 
         Ok(())
     }
 
     /// Check memory and take action if thresholds are exceeded
-    fn check_and_act(&mut self) -> Result<()> {
-        let meminfo = MemInfo::read().context("Failed to read memory info")?;
-
+    fn check_and_act_with_meminfo(&mut self, meminfo: &MemInfo) -> Result<()> {
         log::debug!("Current memory status: {meminfo}");
 
         // Check if we're in cooldown period after a recent kill
@@ -214,7 +244,7 @@ impl DaemonService {
         }
 
         // Determine if we need to kill and what strategy to use
-        let kill_strategy = self.determine_kill_strategy(&meminfo)?;
+        let kill_strategy = self.determine_kill_strategy(meminfo)?;
 
         if let Some(strategy) = kill_strategy {
             log::warn!("Memory threshold exceeded - using {strategy:?} strategy");
@@ -229,6 +259,44 @@ impl DaemonService {
         }
 
         Ok(())
+    }
+
+    /// Calculate adaptive sleep duration based on memory headroom
+    ///
+    /// Returns Duration between 100ms and 1000ms based on how far we are
+    /// from the warning thresholds. When memory is low (close to threshold),
+    /// we check more frequently. When memory is plentiful, we check less often.
+    ///
+    /// Adaptive sleep algorithm (inspired by earlyoom):
+    /// - headroom <= 0: 100ms (critical, check frequently)
+    /// - headroom >= 20: 1000ms (safe, check less often)
+    /// - Linear interpolation between these values
+    fn calculate_adaptive_sleep(&self, meminfo: &MemInfo) -> Duration {
+        // Constants for adaptive sleep
+        const MIN_SLEEP_MS: u64 = 100; // Minimum sleep when critical
+        const MAX_SLEEP_MS: u64 = 1000; // Maximum sleep when safe
+        const MAX_HEADROOM: f64 = 20.0; // Headroom at which we use max sleep
+
+        // Calculate headroom (how far we are from thresholds)
+        let mem_headroom = meminfo.mem_available_percent() - self.config.mem_threshold_warn;
+        let swap_headroom = meminfo.swap_free_percent() - self.config.swap_threshold_warn;
+
+        // Use the smaller headroom (most critical resource)
+        let headroom = mem_headroom.min(swap_headroom);
+
+        // Map headroom to sleep duration:
+        // headroom <= 0: MIN_SLEEP_MS (critical, check frequently)
+        // headroom >= MAX_HEADROOM: MAX_SLEEP_MS (safe, check less often)
+        let sleep_ms = if headroom <= 0.0 {
+            MIN_SLEEP_MS
+        } else if headroom >= MAX_HEADROOM {
+            MAX_SLEEP_MS
+        } else {
+            // Linear interpolation: MIN_SLEEP_MS to MAX_SLEEP_MS
+            MIN_SLEEP_MS + ((headroom / MAX_HEADROOM) * (MAX_SLEEP_MS - MIN_SLEEP_MS) as f64) as u64
+        };
+
+        Duration::from_millis(sleep_ms)
     }
 
     /// Determine if we need to kill a process and what strategy to use
@@ -343,6 +411,21 @@ impl DaemonService {
             return true;
         }
 
+        // Never kill protected processes (oom_score_adj = -1000)
+        if process.oom_score_adj == -1000 {
+            log::debug!(
+                "Ignoring process {} (protected with oom_score_adj=-1000)",
+                process.pid
+            );
+            return true;
+        }
+
+        // Never kill zombie processes (already dead)
+        if process.is_zombie {
+            log::debug!("Ignoring process {} (zombie)", process.pid);
+            return true;
+        }
+
         // Check ignore patterns
         for pattern in &self.config.ignore {
             if pattern.is_match(&process.cmdline) || pattern.is_match(&process.name) {
@@ -381,6 +464,19 @@ impl DaemonService {
 
     /// Kill the selected victim process
     fn kill_victim(&self, victim: ProcessInfo, strategy: KillStrategy) -> Result<()> {
+        // Double-check: re-verify memory situation before killing
+        let meminfo = MemInfo::read()?;
+        let still_critical = self.determine_kill_strategy(&meminfo)?;
+
+        if still_critical.is_none() {
+            log::info!(
+                "Memory situation improved, skipping kill of {} ({})",
+                victim.pid,
+                sanitize_for_log(&victim.name)
+            );
+            return Ok(());
+        }
+
         log::warn!(
             "Killing process {} ({}) - RSS: {} KiB, Strategy: {:?}",
             victim.pid,
@@ -404,7 +500,10 @@ impl DaemonService {
         let kill_info = KillInfo::new(
             victim.pid,
             victim.name.clone(),
+            victim.cmdline.clone(),
+            victim.uid,
             victim.rss_kb,
+            victim.oom_score,
             strategy,
             &result,
         );
@@ -432,12 +531,16 @@ impl DaemonService {
         Ok(())
     }
 
-    /// Send desktop notification about killed process
+    /// Send notification about killed process via scripts and D-Bus
     fn send_notification(&self, kill_info: &KillInfo) -> Result<()> {
-        // TODO: Implement desktop notifications
-        // This would use a crate like notify-rust
-        log::debug!("Notification: Killed process {}", kill_info.pid);
-        Ok(())
+        self.notification_manager.send_post_kill_notification(
+            kill_info.pid,
+            &kill_info.name,
+            &kill_info.cmdline,
+            kill_info.uid,
+            kill_info.rss_kb,
+            kill_info.oom_score,
+        )
     }
 
     /// Report current status
@@ -456,5 +559,110 @@ impl DaemonService {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    fn create_test_meminfo(mem_available_percent: f64, swap_free_percent: f64) -> MemInfo {
+        // Create meminfo with specific percentages
+        // mem_available / mem_total = mem_available_percent / 100
+        let mem_total = 16_000_000; // 16 GB in KiB
+        let mem_available = (mem_total as f64 * mem_available_percent / 100.0) as u64;
+
+        let swap_total = 8_000_000; // 8 GB in KiB
+        let swap_free = (swap_total as f64 * swap_free_percent / 100.0) as u64;
+
+        MemInfo {
+            mem_total,
+            mem_available,
+            swap_total,
+            swap_free,
+        }
+    }
+
+    #[test]
+    fn test_adaptive_sleep_critical() {
+        // When memory is critical (below threshold), sleep should be minimum (100ms)
+        let config = Config::default(); // warn threshold = 10%
+        let service = DaemonService::new(config);
+
+        // Memory at 5% available (below 10% warn threshold)
+        let meminfo = create_test_meminfo(5.0, 5.0);
+        let duration = service.calculate_adaptive_sleep(&meminfo);
+
+        assert_eq!(duration, Duration::from_millis(100));
+    }
+
+    #[test]
+    fn test_adaptive_sleep_safe() {
+        // When memory is safe (well above threshold), sleep should be maximum (1000ms)
+        let config = Config::default(); // warn threshold = 10%
+        let service = DaemonService::new(config);
+
+        // Memory at 50% available (40% headroom above 10% threshold, > 20% max)
+        let meminfo = create_test_meminfo(50.0, 50.0);
+        let duration = service.calculate_adaptive_sleep(&meminfo);
+
+        assert_eq!(duration, Duration::from_millis(1000));
+    }
+
+    #[test]
+    fn test_adaptive_sleep_interpolation() {
+        // When memory is in the middle, sleep should be interpolated
+        let config = Config::default(); // warn threshold = 10%
+        let service = DaemonService::new(config);
+
+        // Memory at 20% available (10% headroom above 10% threshold)
+        // 10% headroom / 20% max headroom = 50% of the way
+        // 100 + (0.5 * 900) = 550ms
+        let meminfo = create_test_meminfo(20.0, 20.0);
+        let duration = service.calculate_adaptive_sleep(&meminfo);
+
+        assert_eq!(duration, Duration::from_millis(550));
+    }
+
+    #[test]
+    fn test_adaptive_sleep_uses_minimum_headroom() {
+        // Should use the smaller headroom (memory or swap)
+        let config = Config::default(); // warn threshold = 10%
+        let service = DaemonService::new(config);
+
+        // Memory at 50% but swap at 12% (only 2% headroom)
+        // 2% headroom / 20% max headroom = 10% of the way
+        // 100 + (0.1 * 900) = 190ms
+        let meminfo = create_test_meminfo(50.0, 12.0);
+        let duration = service.calculate_adaptive_sleep(&meminfo);
+
+        assert_eq!(duration, Duration::from_millis(190));
+    }
+
+    #[test]
+    fn test_adaptive_sleep_exactly_at_threshold() {
+        // When exactly at threshold (headroom = 0), should be minimum
+        let config = Config::default(); // warn threshold = 10%
+        let service = DaemonService::new(config);
+
+        // Memory exactly at 10% threshold
+        let meminfo = create_test_meminfo(10.0, 10.0);
+        let duration = service.calculate_adaptive_sleep(&meminfo);
+
+        assert_eq!(duration, Duration::from_millis(100));
+    }
+
+    #[test]
+    fn test_adaptive_sleep_at_max_headroom() {
+        // When headroom is exactly at max (20%), should be maximum sleep
+        let config = Config::default(); // warn threshold = 10%
+        let service = DaemonService::new(config);
+
+        // Memory at 30% (20% headroom above 10% threshold)
+        let meminfo = create_test_meminfo(30.0, 30.0);
+        let duration = service.calculate_adaptive_sleep(&meminfo);
+
+        assert_eq!(duration, Duration::from_millis(1000));
     }
 }

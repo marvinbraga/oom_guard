@@ -90,8 +90,9 @@ pub struct Config {
     pub swap_size_kill: Option<u64>, // Kill size in KiB
 
     // Monitoring intervals
-    pub check_interval: Duration,  // How often to check memory
+    pub check_interval: Duration, // How often to check memory (fixed, or max for adaptive)
     pub report_interval: Duration, // How often to report status
+    pub adaptive_sleep: bool,     // Use adaptive sleep based on memory headroom
 
     // Process selection
     pub sort_by_rss: bool,  // Sort by RSS instead of oom_score
@@ -117,6 +118,9 @@ pub struct Config {
 
     // Priority setting
     pub priority: Option<i32>, // Daemon priority
+
+    // Syslog
+    pub syslog: bool, // Use syslog instead of stdout/stderr
 }
 
 impl Config {
@@ -153,6 +157,8 @@ impl Config {
         // Monitoring intervals
         if let Some(interval) = args.interval {
             config.check_interval = Duration::from_secs(interval);
+            // When user specifies interval, disable adaptive sleep
+            config.adaptive_sleep = false;
         }
         if let Some(report) = args.report {
             config.report_interval = Duration::from_secs(report);
@@ -187,6 +193,9 @@ impl Config {
 
         // Priority
         config.priority = args.priority;
+
+        // Syslog
+        config.syslog = args.syslog;
 
         // Apply environment variable overrides
         config = env::apply_env_overrides(config)?;
@@ -259,8 +268,9 @@ impl Default for Config {
             mem_size_kill: None,
             swap_size_warn: None,
             swap_size_kill: None,
-            check_interval: Duration::from_secs(1), // Check every second
+            check_interval: Duration::from_secs(1), // Check every second (or max for adaptive)
             report_interval: Duration::from_secs(60), // Report every minute
+            adaptive_sleep: true,                   // Use adaptive sleep by default
             sort_by_rss: false,                     // Use oom_score by default
             prefer: Vec::new(),
             avoid: Vec::new(),
@@ -274,6 +284,7 @@ impl Default for Config {
             post_kill_script: None,
             kill_group: false,
             priority: None,
+            syslog: false,
         }
     }
 }

@@ -55,6 +55,21 @@ impl ProcessSelector {
             return false;
         }
 
+        // Never kill protected processes (oom_score_adj = -1000)
+        if process.oom_score_adj == -1000 {
+            log::trace!(
+                "Skipping protected process (oom_score_adj=-1000): {}",
+                process.name
+            );
+            return false;
+        }
+
+        // Never kill zombie processes (already dead)
+        if process.is_zombie {
+            log::trace!("Skipping zombie process: {}", process.name);
+            return false;
+        }
+
         // Check ignore patterns (highest priority - completely skip)
         if self.matches_patterns(&self.config.ignore, process) {
             log::trace!("Process {} matches ignore pattern", process.name);
@@ -222,7 +237,45 @@ mod tests {
             cmdline: cmdline.to_string(),
             rss_kb,
             oom_score,
+            oom_score_adj: 0,
             uid: 1000,
+            state: 'S',
+            is_zombie: false,
+        }
+    }
+
+    fn create_test_process_with_adj(
+        pid: i32,
+        name: &str,
+        cmdline: &str,
+        rss_kb: u64,
+        oom_score: i32,
+        oom_score_adj: i32,
+    ) -> ProcessInfo {
+        ProcessInfo {
+            pid,
+            name: name.to_string(),
+            cmdline: cmdline.to_string(),
+            rss_kb,
+            oom_score,
+            oom_score_adj,
+            uid: 1000,
+            state: 'S',
+            is_zombie: false,
+        }
+    }
+
+    fn create_zombie_process(pid: i32, name: &str, cmdline: &str) -> ProcessInfo {
+        ProcessInfo {
+            pid,
+            name: name.to_string(),
+            cmdline: cmdline.to_string(),
+            rss_kb: 0,
+            oom_score: 0,
+            oom_score_adj: 0,
+            uid: 1000,
+            state: 'Z',
+            is_zombie: true,
         }
     }
 
@@ -333,5 +386,39 @@ mod tests {
 
         let user_process = create_test_process(1235, "user-app", "/usr/bin/app", 100000, 50);
         assert!(selector.is_killable(&user_process));
+    }
+
+    #[test]
+    fn test_protected_process_skipped() {
+        let config = Config::default();
+        let selector = ProcessSelector::new(config);
+
+        // Process with oom_score_adj=-1000 should be protected
+        let protected =
+            create_test_process_with_adj(1234, "sshd", "/usr/sbin/sshd", 50000, 100, -1000);
+        assert!(!selector.is_killable(&protected));
+
+        // Process with oom_score_adj=0 should be killable
+        let normal =
+            create_test_process_with_adj(1235, "firefox", "/usr/bin/firefox", 500000, 100, 0);
+        assert!(selector.is_killable(&normal));
+
+        // Process with oom_score_adj=-500 should still be killable (only -1000 is protected)
+        let adjusted = create_test_process_with_adj(1236, "app", "/usr/bin/app", 100000, 50, -500);
+        assert!(selector.is_killable(&adjusted));
+    }
+
+    #[test]
+    fn test_zombie_process_skipped() {
+        let config = Config::default();
+        let selector = ProcessSelector::new(config);
+
+        // Zombie process should not be killable
+        let zombie = create_zombie_process(1234, "defunct", "[defunct]");
+        assert!(!selector.is_killable(&zombie));
+
+        // Normal process should be killable
+        let normal = create_test_process(1235, "firefox", "/usr/bin/firefox", 500000, 100);
+        assert!(selector.is_killable(&normal));
     }
 }
