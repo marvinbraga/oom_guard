@@ -10,11 +10,7 @@ fn main() {
     let args = Args::parse_args();
 
     // Initialize logging based on debug flag
-    let log_level = if args.debug {
-        "debug"
-    } else {
-        "info"
-    };
+    let log_level = if args.debug { "debug" } else { "info" };
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level))
         .format_timestamp_secs()
@@ -24,7 +20,10 @@ fn main() {
     // This ensures the daemon stays responsive even under memory pressure
     match mlockall(MlockAllFlags::MCL_CURRENT | MlockAllFlags::MCL_FUTURE) {
         Ok(_) => log::info!("Memory locked successfully - daemon will not be swapped"),
-        Err(e) => log::warn!("Failed to lock memory: {}. Daemon may be slow under memory pressure.", e),
+        Err(e) => log::warn!(
+            "Failed to lock memory: {}. Daemon may be slow under memory pressure.",
+            e
+        ),
     }
 
     // Create configuration from arguments

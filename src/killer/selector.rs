@@ -209,7 +209,13 @@ mod tests {
             .unwrap()
     }
 
-    fn create_test_process(pid: i32, name: &str, cmdline: &str, rss_kb: u64, oom_score: i32) -> ProcessInfo {
+    fn create_test_process(
+        pid: i32,
+        name: &str,
+        cmdline: &str,
+        rss_kb: u64,
+        oom_score: i32,
+    ) -> ProcessInfo {
         ProcessInfo {
             pid,
             name: name.to_string(),
@@ -281,7 +287,8 @@ mod tests {
 
         let selector = ProcessSelector::new(config);
 
-        let important = create_test_process(1234, "important-app", "/usr/bin/important-app", 500000, 100);
+        let important =
+            create_test_process(1234, "important-app", "/usr/bin/important-app", 500000, 100);
         let regular = create_test_process(1235, "regular-app", "/usr/bin/regular-app", 100000, 50);
 
         let candidates = vec![important.clone(), regular.clone()];
@@ -318,7 +325,8 @@ mod tests {
 
         let selector = ProcessSelector::new(config);
 
-        let mut root_process = create_test_process(1234, "root-daemon", "/usr/sbin/daemon", 100000, 50);
+        let mut root_process =
+            create_test_process(1234, "root-daemon", "/usr/sbin/daemon", 100000, 50);
         root_process.uid = 0;
 
         assert!(!selector.is_killable(&root_process));

@@ -3,8 +3,8 @@
 mod args;
 mod env;
 
-pub use args::Args;
 use anyhow::{bail, Context, Result};
+pub use args::Args;
 use regex::{Regex, RegexBuilder};
 use std::time::Duration;
 
@@ -48,10 +48,7 @@ fn compile_safe_regex(pattern: &str) -> Result<Regex> {
 /// Returns (warn_threshold, kill_threshold)
 fn parse_threshold_pair(s: &str, default_kill_ratio: f64) -> Result<(f64, f64)> {
     let parts: Vec<&str> = s.split(',').collect();
-    let warn: f64 = parts[0]
-        .trim()
-        .parse()
-        .context("Invalid threshold value")?;
+    let warn: f64 = parts[0].trim().parse().context("Invalid threshold value")?;
 
     let kill: f64 = if parts.len() > 1 {
         parts[1].trim().parse().context("Invalid kill threshold")?
@@ -66,10 +63,7 @@ fn parse_threshold_pair(s: &str, default_kill_ratio: f64) -> Result<(f64, f64)> 
 /// Returns (warn_size, kill_size)
 fn parse_size_pair(s: &str, default_kill_ratio: f64) -> Result<(u64, u64)> {
     let parts: Vec<&str> = s.split(',').collect();
-    let warn: u64 = parts[0]
-        .trim()
-        .parse()
-        .context("Invalid size value")?;
+    let warn: u64 = parts[0].trim().parse().context("Invalid size value")?;
 
     let kill: u64 = if parts.len() > 1 {
         parts[1].trim().parse().context("Invalid kill size")?
@@ -100,26 +94,26 @@ pub struct Config {
     pub report_interval: Duration, // How often to report status
 
     // Process selection
-    pub sort_by_rss: bool,    // Sort by RSS instead of oom_score
-    pub prefer: Vec<Regex>,   // Regex patterns for preferred victims
-    pub avoid: Vec<Regex>,    // Regex patterns to avoid killing
-    pub ignore: Vec<Regex>,   // Regex patterns to completely ignore
+    pub sort_by_rss: bool,  // Sort by RSS instead of oom_score
+    pub prefer: Vec<Regex>, // Regex patterns for preferred victims
+    pub avoid: Vec<Regex>,  // Regex patterns to avoid killing
+    pub ignore: Vec<Regex>, // Regex patterns to completely ignore
 
     // Behavior flags
-    pub dry_run: bool,        // Don't actually kill processes
-    pub debug: bool,          // Enable debug logging
-    pub notify: bool,         // Send notifications when killing
+    pub dry_run: bool, // Don't actually kill processes
+    pub debug: bool,   // Enable debug logging
+    pub notify: bool,  // Send notifications when killing
 
     // System interaction
-    pub ignore_root_user: bool,  // Ignore processes owned by root
+    pub ignore_root_user: bool, // Ignore processes owned by root
 
     // Notification options
-    pub notify_dbus: bool,                 // Enable D-Bus notifications
-    pub pre_kill_script: Option<String>,   // Script to run before killing
-    pub post_kill_script: Option<String>,  // Script to run after killing
+    pub notify_dbus: bool,                // Enable D-Bus notifications
+    pub pre_kill_script: Option<String>,  // Script to run before killing
+    pub post_kill_script: Option<String>, // Script to run after killing
 
     // Process group killing
-    pub kill_group: bool,     // Kill entire process group
+    pub kill_group: bool, // Kill entire process group
 
     // Priority setting
     pub priority: Option<i32>, // Daemon priority
@@ -265,9 +259,9 @@ impl Default for Config {
             mem_size_kill: None,
             swap_size_warn: None,
             swap_size_kill: None,
-            check_interval: Duration::from_secs(1),   // Check every second
+            check_interval: Duration::from_secs(1), // Check every second
             report_interval: Duration::from_secs(60), // Report every minute
-            sort_by_rss: false,                       // Use oom_score by default
+            sort_by_rss: false,                     // Use oom_score by default
             prefer: Vec::new(),
             avoid: Vec::new(),
             ignore: Vec::new(),

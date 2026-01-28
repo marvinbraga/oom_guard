@@ -17,11 +17,16 @@ impl HookValidator {
         }
 
         // Security: Check for symlinks (potential attack vector)
-        let symlink_meta = fs::symlink_metadata(path)
-            .context(format!("Failed to read symlink metadata for: {}", script_path))?;
+        let symlink_meta = fs::symlink_metadata(path).context(format!(
+            "Failed to read symlink metadata for: {}",
+            script_path
+        ))?;
 
         if symlink_meta.file_type().is_symlink() {
-            warn!("Script {} is a symlink - this may be a security risk", script_path);
+            warn!(
+                "Script {} is a symlink - this may be a security risk",
+                script_path
+            );
             // Resolve the symlink and validate the target
             let resolved = fs::canonicalize(path)
                 .context(format!("Failed to resolve symlink: {}", script_path))?;
@@ -62,8 +67,8 @@ impl HookValidator {
         }
 
         // Check if it's executable
-        let metadata = fs::metadata(path)
-            .context(format!("Failed to read metadata for: {}", script_path))?;
+        let metadata =
+            fs::metadata(path).context(format!("Failed to read metadata for: {}", script_path))?;
         let permissions = metadata.permissions();
 
         #[cfg(unix)]
@@ -138,7 +143,8 @@ impl HookEnvironment {
              - OOM_GUARD_PID: Process ID of the killed process\n\
              - OOM_GUARD_NAME: Name of the killed process\n\
              - OOM_GUARD_RSS: Resident Set Size in KiB\n\
-             - OOM_GUARD_SCORE: OOM score of the process".to_string()
+             - OOM_GUARD_SCORE: OOM score of the process"
+            .to_string()
     }
 }
 

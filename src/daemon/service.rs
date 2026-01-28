@@ -122,32 +122,44 @@ impl DaemonService {
         let meminfo = MemInfo::read()?;
 
         log::info!("=== OOM Guard v{} starting ===", env!("CARGO_PKG_VERSION"));
-        log::info!("Memory total: {} MiB, available: {} MiB ({:.1}%)",
-                   meminfo.mem_total / 1024,
-                   meminfo.mem_available / 1024,
-                   meminfo.mem_available_percent());
-        log::info!("Swap total: {} MiB, free: {} MiB ({:.1}%)",
-                   meminfo.swap_total / 1024,
-                   meminfo.swap_free / 1024,
-                   meminfo.swap_free_percent());
+        log::info!(
+            "Memory total: {} MiB, available: {} MiB ({:.1}%)",
+            meminfo.mem_total / 1024,
+            meminfo.mem_available / 1024,
+            meminfo.mem_available_percent()
+        );
+        log::info!(
+            "Swap total: {} MiB, free: {} MiB ({:.1}%)",
+            meminfo.swap_total / 1024,
+            meminfo.swap_free / 1024,
+            meminfo.swap_free_percent()
+        );
 
         log::info!("Thresholds:");
 
         // Display thresholds based on configuration
         if self.config.mem_size_warn.is_some() {
-            log::info!("  SIGTERM when mem <= {} KiB AND swap <= {} KiB",
-                       self.config.mem_size_warn.unwrap_or(0),
-                       self.config.swap_size_warn.unwrap_or(0));
-            log::info!("  SIGKILL when mem <= {} KiB AND swap <= {} KiB",
-                       self.config.mem_size_kill.unwrap_or(0),
-                       self.config.swap_size_kill.unwrap_or(0));
+            log::info!(
+                "  SIGTERM when mem <= {} KiB AND swap <= {} KiB",
+                self.config.mem_size_warn.unwrap_or(0),
+                self.config.swap_size_warn.unwrap_or(0)
+            );
+            log::info!(
+                "  SIGKILL when mem <= {} KiB AND swap <= {} KiB",
+                self.config.mem_size_kill.unwrap_or(0),
+                self.config.swap_size_kill.unwrap_or(0)
+            );
         } else {
-            log::info!("  SIGTERM when mem <= {:.1}% AND swap <= {:.1}%",
-                       self.config.mem_threshold_warn,
-                       self.config.swap_threshold_warn);
-            log::info!("  SIGKILL when mem <= {:.1}% AND swap <= {:.1}%",
-                       self.config.mem_threshold_kill,
-                       self.config.swap_threshold_kill);
+            log::info!(
+                "  SIGTERM when mem <= {:.1}% AND swap <= {:.1}%",
+                self.config.mem_threshold_warn,
+                self.config.swap_threshold_warn
+            );
+            log::info!(
+                "  SIGKILL when mem <= {:.1}% AND swap <= {:.1}%",
+                self.config.mem_threshold_kill,
+                self.config.swap_threshold_kill
+            );
         }
 
         if !self.config.prefer.is_empty() {
@@ -172,9 +184,11 @@ impl DaemonService {
             log::info!("Daemon priority: {}", priority);
         }
 
-        log::info!("Monitoring interval: {}s, report interval: {}s",
-                   self.config.check_interval.as_secs(),
-                   self.config.report_interval.as_secs());
+        log::info!(
+            "Monitoring interval: {}s, report interval: {}s",
+            self.config.check_interval.as_secs(),
+            self.config.report_interval.as_secs()
+        );
         log::info!("==========================================");
 
         Ok(())
@@ -202,10 +216,7 @@ impl DaemonService {
         let kill_strategy = self.determine_kill_strategy(&meminfo)?;
 
         if let Some(strategy) = kill_strategy {
-            log::warn!(
-                "Memory threshold exceeded - using {:?} strategy",
-                strategy
-            );
+            log::warn!("Memory threshold exceeded - using {:?} strategy", strategy);
 
             // Select victim process
             if let Some(victim) = self.select_victim()? {
@@ -270,8 +281,7 @@ impl DaemonService {
 
     /// Select a victim process to kill
     fn select_victim(&self) -> Result<Option<ProcessInfo>> {
-        let mut processes = ProcessInfo::all_processes()
-            .context("Failed to get process list")?;
+        let mut processes = ProcessInfo::all_processes().context("Failed to get process list")?;
 
         // Filter out processes based on ignore patterns
         processes.retain(|p| !self.should_ignore(p));
@@ -313,7 +323,10 @@ impl DaemonService {
         }
 
         if let Some(victim) = avoided.first() {
-            log::warn!("No candidates available, selecting from avoided: {}", victim);
+            log::warn!(
+                "No candidates available, selecting from avoided: {}",
+                victim
+            );
             return Ok(Some(victim.clone()));
         }
 
@@ -358,7 +371,10 @@ impl DaemonService {
     fn should_prefer(&self, process: &ProcessInfo) -> bool {
         for pattern in &self.config.prefer {
             if pattern.is_match(&process.cmdline) || pattern.is_match(&process.name) {
-                log::debug!("Preferring process {} (matches prefer pattern)", process.pid);
+                log::debug!(
+                    "Preferring process {} (matches prefer pattern)",
+                    process.pid
+                );
                 return true;
             }
         }
@@ -366,11 +382,7 @@ impl DaemonService {
     }
 
     /// Kill the selected victim process
-    fn kill_victim(
-        &self,
-        victim: ProcessInfo,
-        strategy: KillStrategy,
-    ) -> Result<()> {
+    fn kill_victim(&self, victim: ProcessInfo, strategy: KillStrategy) -> Result<()> {
         log::warn!(
             "Killing process {} ({}) - RSS: {} KiB, Strategy: {:?}",
             victim.pid,
@@ -437,7 +449,10 @@ impl DaemonService {
         log::info!("Status Report: {}", meminfo);
 
         if let Some(last_kill_time) = self.last_kill {
-            log::info!("Last kill: {:.1}s ago", last_kill_time.elapsed().as_secs_f64());
+            log::info!(
+                "Last kill: {:.1}s ago",
+                last_kill_time.elapsed().as_secs_f64()
+            );
         } else {
             log::info!("No kills yet");
         }

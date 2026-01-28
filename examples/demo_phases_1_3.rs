@@ -24,10 +24,22 @@ fn main() -> Result<()> {
     let config = Config::from_args(args)?;
 
     println!("Configuration loaded:");
-    println!("  Memory threshold (warn): {:.1}%", config.mem_threshold_warn);
-    println!("  Memory threshold (kill): {:.1}%", config.mem_threshold_kill);
-    println!("  Swap threshold (warn): {:.1}%", config.swap_threshold_warn);
-    println!("  Swap threshold (kill): {:.1}%", config.swap_threshold_kill);
+    println!(
+        "  Memory threshold (warn): {:.1}%",
+        config.mem_threshold_warn
+    );
+    println!(
+        "  Memory threshold (kill): {:.1}%",
+        config.mem_threshold_kill
+    );
+    println!(
+        "  Swap threshold (warn): {:.1}%",
+        config.swap_threshold_warn
+    );
+    println!(
+        "  Swap threshold (kill): {:.1}%",
+        config.swap_threshold_kill
+    );
     println!("  Check interval: {}s", config.check_interval.as_secs());
     println!("  Sort by RSS: {}", config.sort_by_rss);
     println!("  Dry run: {}", config.dry_run);
@@ -41,12 +53,17 @@ fn main() -> Result<()> {
     let mem_info = MemInfo::read()?;
     println!("System Memory Information:");
     println!("  Total: {}", MemInfo::format_size(mem_info.mem_total));
-    println!("  Available: {} ({:.1}%)",
+    println!(
+        "  Available: {} ({:.1}%)",
         MemInfo::format_size(mem_info.mem_available),
         mem_info.mem_available_percent()
     );
-    println!("  Swap Total: {}", MemInfo::format_size(mem_info.swap_total));
-    println!("  Swap Free: {} ({:.1}%)",
+    println!(
+        "  Swap Total: {}",
+        MemInfo::format_size(mem_info.swap_total)
+    );
+    println!(
+        "  Swap Free: {} ({:.1}%)",
         MemInfo::format_size(mem_info.swap_free),
         mem_info.swap_free_percent()
     );
@@ -110,7 +127,8 @@ fn main() -> Result<()> {
     sorted.sort_by(|a, b| b.rss_kb.cmp(&a.rss_kb));
 
     for (i, proc) in sorted.iter().take(10).enumerate() {
-        println!("{}. {} (PID {}): {} - OOM score: {}",
+        println!(
+            "{}. {} (PID {}): {} - OOM score: {}",
             i + 1,
             proc.name,
             proc.pid,
@@ -127,7 +145,8 @@ fn main() -> Result<()> {
     by_oom.sort_by(|a, b| b.oom_score.cmp(&a.oom_score));
 
     for (i, proc) in by_oom.iter().take(10).enumerate() {
-        println!("{}. {} (PID {}): OOM={}, RSS={}",
+        println!(
+            "{}. {} (PID {}): OOM={}, RSS={}",
             i + 1,
             proc.name,
             proc.pid,

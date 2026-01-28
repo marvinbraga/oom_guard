@@ -25,8 +25,7 @@ impl MemInfo {
 
     /// Read memory information from a specific path (for testing)
     fn read_from_path(path: &str) -> Result<Self> {
-        let file = File::open(path)
-            .with_context(|| format!("Failed to open {}", path))?;
+        let file = File::open(path).with_context(|| format!("Failed to open {}", path))?;
         let reader = BufReader::new(file);
 
         let mut info = MemInfo::default();
@@ -40,7 +39,8 @@ impl MemInfo {
             }
 
             let key = parts[0].trim_end_matches(':');
-            let value: u64 = parts[1].parse()
+            let value: u64 = parts[1]
+                .parse()
                 .with_context(|| format!("Failed to parse value for {}", key))?;
 
             match key {

@@ -15,11 +15,7 @@ pub fn run(config: Config) -> Result<()> {
     }
 
     // Set log level based on configuration
-    let log_level = if config.debug {
-        "debug"
-    } else {
-        "info"
-    };
+    let log_level = if config.debug { "debug" } else { "info" };
 
     std::env::set_var("RUST_LOG", log_level);
 

@@ -82,11 +82,7 @@ fn is_process_alive(pid: i32) -> bool {
 ///
 /// # Returns
 /// Result containing the KillResult enum describing the outcome
-pub fn kill_process(
-    pid: i32,
-    strategy: KillStrategy,
-    kill_group: bool,
-) -> Result<KillResult> {
+pub fn kill_process(pid: i32, strategy: KillStrategy, kill_group: bool) -> Result<KillResult> {
     log::debug!(
         "Attempting to kill process {} (strategy: {:?}, group: {})",
         pid,
@@ -199,9 +195,7 @@ fn kill_forceful(pid: i32, kill_group: bool) -> Result<KillResult> {
             "Process {} still alive after SIGKILL - this should not happen!",
             pid
         );
-        Ok(KillResult::Error(
-            "process survived SIGKILL".to_string(),
-        ))
+        Ok(KillResult::Error("process survived SIGKILL".to_string()))
     } else {
         Ok(KillResult::Success)
     }

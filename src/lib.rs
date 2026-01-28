@@ -1,9 +1,9 @@
 // OOM Guard - Memory monitor and process management library
 
 pub mod config;
-pub mod monitor;
-pub mod killer;
 pub mod daemon;
+pub mod killer;
+pub mod monitor;
 pub mod notify;
 
 // Re-export commonly used types
@@ -15,7 +15,13 @@ pub use monitor::{MemInfo, ProcessInfo};
 /// could inject fake log entries or corrupt log output.
 pub fn sanitize_for_log(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_control() && c != '\n' && c != '\t' { '?' } else { c })
+        .map(|c| {
+            if c.is_control() && c != '\n' && c != '\t' {
+                '?'
+            } else {
+                c
+            }
+        })
         .collect()
 }
 
@@ -34,7 +40,10 @@ mod tests {
         // Test with null byte
         assert_eq!(sanitize_for_log("evil\x00process"), "evil?process");
         // Test with carriage return (potential log injection)
-        assert_eq!(sanitize_for_log("process\rFake: log entry"), "process?Fake: log entry");
+        assert_eq!(
+            sanitize_for_log("process\rFake: log entry"),
+            "process?Fake: log entry"
+        );
         // Test with escape sequences
         assert_eq!(sanitize_for_log("process\x1b[31mred"), "process?[31mred");
     }

@@ -21,29 +21,26 @@ impl ProcessInfo {
         let process = Process::new(pid)?;
         let stat = process.stat()?;
         let status = process.status()?;
-        
+
         // Get RSS in KiB (stat.rss is in pages, typically 4KB)
         let page_size = procfs::page_size();
         let rss_kb = (stat.rss * page_size) / 1024;
-        
+
         // Get OOM score
         let oom_score = process.oom_score().unwrap_or(0);
-        
+
         // Get UID
         let uid = status.ruid;
-        
+
         // Get command line
-        let cmdline = process
-            .cmdline()
-            .unwrap_or_default()
-            .join(" ");
-        
+        let cmdline = process.cmdline().unwrap_or_default().join(" ");
+
         let cmdline = if cmdline.is_empty() {
             format!("[{}]", stat.comm)
         } else {
             cmdline
         };
-        
+
         Ok(Self {
             pid,
             name: stat.comm,
@@ -53,16 +50,16 @@ impl ProcessInfo {
             uid,
         })
     }
-    
+
     /// Get all processes on the system
     pub fn all_processes() -> Result<Vec<Self>> {
         let mut processes = Vec::new();
-        
+
         for entry in fs::read_dir("/proc")? {
             let entry = entry?;
             let file_name = entry.file_name();
             let name = file_name.to_string_lossy();
-            
+
             // Check if directory name is a number (PID)
             if let Ok(pid) = name.parse::<i32>() {
                 if let Ok(info) = Self::read(pid) {
@@ -70,7 +67,7 @@ impl ProcessInfo {
                 }
             }
         }
-        
+
         Ok(processes)
     }
 }
@@ -80,10 +77,7 @@ impl std::fmt::Display for ProcessInfo {
         write!(
             f,
             "PID {} ({}): {} KiB, OOM score {}",
-            self.pid,
-            self.name,
-            self.rss_kb,
-            self.oom_score
+            self.pid, self.name, self.rss_kb, self.oom_score
         )
     }
 }
