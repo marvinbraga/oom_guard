@@ -1,0 +1,56 @@
+[package]
+name = "oom_guard"
+version = "0.1.0"
+edition = "2021"
+authors = ["Marcus Vinicius Braga <mvbraga@gmail.com>"]
+description = "Early OOM daemon that prevents system freezes by killing memory-hogging processes"
+license = "GPL-2.0"
+repository = "https://github.com/marvinbraga/oom_guard"
+keywords = ["oom", "memory", "daemon", "systemd", "linux"]
+categories = ["command-line-utilities", "os::linux-apis"]
+
+[dependencies]
+# Error handling
+anyhow = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Unix system calls
+libc = "0.2"
+
+# Process information
+procfs = "0.16"
+nix = { version = "0.29", features = ["signal", "process", "mman"] }
+
+# Regex for filtering
+regex = "1"
+
+# Signal handling
+signal-hook = "0.3"
+ctrlc = "3"
+
+# CLI parsing (for future phases)
+clap = { version = "4", features = ["derive"] }
+
+# Optional: D-Bus notifications
+notify-rust = { version = "4", optional = true }
+
+# For tests
+[dev-dependencies]
+tempfile = "3.8"
+
+[features]
+default = []
+dbus-notify = ["notify-rust"]
+
+[[bin]]
+name = "oom_guard"
+path = "src/main.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true

@@ -1,0 +1,103 @@
+// Command-line argument parsing
+
+use clap::Parser;
+
+/// OOM Guard - Memory monitor and process killer
+///
+/// A user-space Out-Of-Memory (OOM) killer that monitors system memory
+/// and proactively terminates processes before the kernel OOM killer activates.
+#[derive(Parser, Debug)]
+#[command(name = "oom-guard")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
+#[command(about = "Memory monitor and OOM prevention daemon", long_about = None)]
+pub struct Args {
+    /// Minimum available memory percentage (default: 10)
+    #[arg(short = 'm', long = "mem-min", value_name = "PERCENT")]
+    pub mem_min: Option<f64>,
+
+    /// Minimum available swap percentage (default: 10)
+    #[arg(short = 's', long = "swap-min", value_name = "PERCENT")]
+    pub swap_min: Option<f64>,
+
+    /// Minimum available memory in KiB (alternative to --mem-min)
+    #[arg(short = 'M', long = "mem-min-kb", value_name = "KIB")]
+    pub mem_min_kb: Option<u64>,
+
+    /// Minimum available swap in KiB (alternative to --swap-min)
+    #[arg(short = 'S', long = "swap-min-kb", value_name = "KIB")]
+    pub swap_min_kb: Option<u64>,
+
+    /// Memory check interval in seconds (default: 1)
+    #[arg(short = 'i', long = "interval", value_name = "SECONDS")]
+    pub interval: Option<u64>,
+
+    /// Status report interval in seconds (default: 60)
+    #[arg(short = 'r', long = "report", value_name = "SECONDS")]
+    pub report: Option<u64>,
+
+    /// Sort processes by RSS memory usage instead of oom_score
+    #[arg(long = "sort-by-rss")]
+    pub sort_by_rss: bool,
+
+    /// Prefer to kill processes matching this regex (can be used multiple times)
+    #[arg(long = "prefer", value_name = "REGEX")]
+    pub prefer: Vec<String>,
+
+    /// Avoid killing processes matching this regex (can be used multiple times)
+    #[arg(long = "avoid", value_name = "REGEX")]
+    pub avoid: Vec<String>,
+
+    /// Completely ignore processes matching this regex (can be used multiple times)
+    #[arg(long = "ignore", value_name = "REGEX")]
+    pub ignore: Vec<String>,
+
+    /// Dry run mode - don't actually kill processes, just report what would be killed
+    #[arg(short = 'n', long = "dry-run")]
+    pub dry_run: bool,
+
+    /// Enable verbose logging
+    #[arg(short = 'v', long = "verbose")]
+    pub verbose: bool,
+
+    /// Enable debug logging (implies --verbose)
+    #[arg(short = 'd', long = "debug")]
+    pub debug: bool,
+
+    /// Send desktop notifications when killing processes
+    #[arg(long = "notify")]
+    pub notify: bool,
+
+    /// Ignore processes owned by root user
+    #[arg(long = "ignore-root-user")]
+    pub ignore_root_user: bool,
+
+    /// Only apply --prefer to processes deemed safe to kill
+    #[arg(long = "prefer-regex-safe")]
+    pub prefer_regex_safe: bool,
+
+    /// Set daemon priority (niceness and oom_score_adj)
+    #[arg(short = 'p', long = "set-priority")]
+    pub set_priority: bool,
+
+    /// Kill entire process group instead of just the process
+    #[arg(short = 'g', long = "kill-process-group")]
+    pub kill_process_group: bool,
+}
+
+impl Args {
+    /// Parse arguments from command line
+    pub fn parse_args() -> Self {
+        Self::parse()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_verify_cli() {
+        use clap::CommandFactory;
+        Args::command().debug_assert();
+    }
+}
