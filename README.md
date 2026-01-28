@@ -52,6 +52,7 @@ The installer will:
 - 🎲 Process selection by OOM score or RSS
 - 🔍 Regex-based filtering (prefer/avoid/ignore)
 - 🔒 Memory locking to prevent daemon swapping
+- ⏱️ Adaptive sleep (100ms-1000ms based on headroom)
 
 </td>
 <td width="50%">
@@ -62,6 +63,7 @@ The installer will:
 - 🧪 Dry-run mode for testing
 - 🐧 Systemd integration with hardening
 - 👥 Process group killing support
+- 🚀 pidfd + process_mrelease (Linux 5.3+/5.14+)
 
 </td>
 </tr>
@@ -178,6 +180,7 @@ oom_guard [OPTIONS]
 | `-N /path/script` | Post-kill script |
 | `-P /path/script` | Pre-kill script |
 | `-d` | Debug output |
+| `--syslog` | Use syslog instead of stdout (requires feature) |
 
 ### Example Commands
 
@@ -210,6 +213,8 @@ Scripts receive these environment variables:
 ```bash
 OOM_GUARD_PID      # Process ID
 OOM_GUARD_NAME     # Process name
+OOM_GUARD_CMDLINE  # Full command line
+OOM_GUARD_UID      # User ID of process owner
 OOM_GUARD_RSS      # Memory usage in KiB
 OOM_GUARD_SCORE    # OOM score
 ```
@@ -610,6 +615,13 @@ docker run --privileged --pid=host \
 - [x] Multi-platform binaries (x86_64, ARM64, musl)
 - [x] Security audit and hardening
 - [x] Comprehensive Clippy linting
+- [x] Full earlyoom compatibility
+- [x] Adaptive sleep (100ms-1000ms based on memory headroom)
+- [x] Advanced kernel features (pidfd_open, process_mrelease)
+- [x] Syslog support (optional feature)
+- [x] Process protection detection (oom_score_adj=-1000)
+- [x] Zombie process detection and skipping
+- [x] Double-check pattern before killing
 - [ ] Prometheus metrics exporter
 - [ ] Web dashboard
 - [ ] Machine learning-based prediction

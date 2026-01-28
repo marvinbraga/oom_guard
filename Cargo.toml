@@ -1,6 +1,6 @@
 [package]
 name = "oom_guard"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["Marcus Vinicius Braga <mvbraga@gmail.com>"]
 description = "Early OOM daemon that prevents system freezes by killing memory-hogging processes"
