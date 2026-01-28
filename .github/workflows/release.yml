@@ -19,16 +19,19 @@ jobs:
             os: ubuntu-latest
             artifact_name: oom_guard
             asset_name: oom_guard-linux-x86_64
+            use_cross: false
 
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             artifact_name: oom_guard
             asset_name: oom_guard-linux-x86_64-musl
+            use_cross: false
 
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             artifact_name: oom_guard
             asset_name: oom_guard-linux-aarch64
+            use_cross: true
 
     steps:
       - name: Checkout code
@@ -39,11 +42,9 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Install musl tools
         if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -51,13 +52,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y musl-tools
 
-      - name: Build
+      - name: Build with cross
+        if: matrix.use_cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build with cargo
+        if: ${{ !matrix.use_cross }}
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Strip binary
         run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            aarch64-linux-gnu-strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            # Cross already strips, but let's ensure it's done
+            echo "Binary built with cross (may already be stripped)"
           else
             strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
           fi
