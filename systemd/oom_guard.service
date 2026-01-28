@@ -7,7 +7,7 @@ After=network.target
 Type=simple
 # Configuration via CLI
 # Adjust thresholds as needed: -m MEM_WARN,MEM_KILL -s SWAP_WARN,SWAP_KILL
-ExecStart=/usr/local/bin/oom_guard -m 10,5 -s 10,5 -n -r 3600 -p
+ExecStart=/usr/local/bin/oom_guard -m 10,5 -s 10,5 -n -r 3600 --set-priority=-20
 
 # Alternative: Use environment file for configuration
 # EnvironmentFile=/etc/default/oom_guard
