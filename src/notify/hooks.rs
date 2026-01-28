@@ -13,82 +13,71 @@ impl HookValidator {
 
         // Check if file exists
         if !path.exists() {
-            return Err(anyhow::anyhow!("Script does not exist: {}", script_path));
+            return Err(anyhow::anyhow!("Script does not exist: {script_path}"));
         }
 
         // Security: Check for symlinks (potential attack vector)
         let symlink_meta = fs::symlink_metadata(path).context(format!(
-            "Failed to read symlink metadata for: {}",
-            script_path
+            "Failed to read symlink metadata for: {script_path}"
         ))?;
 
         if symlink_meta.file_type().is_symlink() {
-            warn!(
-                "Script {} is a symlink - this may be a security risk",
-                script_path
-            );
+            warn!("Script {script_path} is a symlink - this may be a security risk");
             // Resolve the symlink and validate the target
             let resolved = fs::canonicalize(path)
-                .context(format!("Failed to resolve symlink: {}", script_path))?;
-            debug!("Symlink {} resolves to {:?}", script_path, resolved);
+                .context(format!("Failed to resolve symlink: {script_path}"))?;
+            debug!("Symlink {} resolves to {}", script_path, resolved.display());
 
             // Validate the resolved target exists and is a file
             if !resolved.is_file() {
                 return Err(anyhow::anyhow!(
-                    "Symlink {} points to non-file target: {:?}",
+                    "Symlink {} points to non-file target: {}",
                     script_path,
-                    resolved
+                    resolved.display()
                 ));
             }
         }
 
         // Check if it's a file (not a directory)
         if !path.is_file() {
-            return Err(anyhow::anyhow!("Path is not a file: {}", script_path));
+            return Err(anyhow::anyhow!("Path is not a file: {script_path}"));
         }
 
         // Security: Check ownership (must be owned by root or current user)
         #[cfg(unix)]
         {
+            // SAFETY: getuid is a standard POSIX function that always succeeds
+            // and returns the real user ID of the calling process.
+            #[allow(unsafe_code)]
             let current_uid = unsafe { nix::libc::getuid() };
             let file_uid = symlink_meta.uid();
 
             if file_uid != 0 && file_uid != current_uid {
                 warn!(
-                    "Script {} is owned by uid {} (not root or current user {})",
-                    script_path, file_uid, current_uid
+                    "Script {script_path} is owned by uid {file_uid} (not root or current user {current_uid})"
                 );
             } else {
                 debug!(
-                    "Script {} ownership validated (uid: {}, current: {})",
-                    script_path, file_uid, current_uid
+                    "Script {script_path} ownership validated (uid: {file_uid}, current: {current_uid})"
                 );
             }
         }
 
         // Check if it's executable
         let metadata =
-            fs::metadata(path).context(format!("Failed to read metadata for: {}", script_path))?;
+            fs::metadata(path).context(format!("Failed to read metadata for: {script_path}"))?;
         let permissions = metadata.permissions();
 
         #[cfg(unix)]
         {
             let mode = permissions.mode();
             if mode & 0o111 == 0 {
-                warn!(
-                    "Script {} is not executable (permissions: {:o})",
-                    script_path, mode
-                );
+                warn!("Script {script_path} is not executable (permissions: {mode:o})");
                 return Err(anyhow::anyhow!(
-                    "Script is not executable: {}. Use 'chmod +x {}'",
-                    script_path,
-                    script_path
+                    "Script is not executable: {script_path}. Use 'chmod +x {script_path}'"
                 ));
             }
-            debug!(
-                "Script {} is valid and executable (permissions: {:o})",
-                script_path, mode
-            );
+            debug!("Script {script_path} is valid and executable (permissions: {mode:o})");
         }
 
         Ok(())
@@ -100,18 +89,18 @@ impl HookValidator {
         post_kill_script: Option<&str>,
     ) -> Result<()> {
         if let Some(script) = pre_kill_script {
-            info!("Validating pre-kill script: {}", script);
+            info!("Validating pre-kill script: {script}");
             if let Err(e) = Self::validate_hook_script(script) {
-                error!("Pre-kill script validation failed: {}", e);
+                error!("Pre-kill script validation failed: {e}");
                 return Err(e);
             }
             info!("Pre-kill script validated successfully");
         }
 
         if let Some(script) = post_kill_script {
-            info!("Validating post-kill script: {}", script);
+            info!("Validating post-kill script: {script}");
             if let Err(e) = Self::validate_hook_script(script) {
-                error!("Post-kill script validation failed: {}", e);
+                error!("Post-kill script validation failed: {e}");
                 return Err(e);
             }
             info!("Post-kill script validated successfully");

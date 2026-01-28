@@ -54,3 +54,53 @@ lto = true
 codegen-units = 1
 opt-level = 3
 strip = true
+
+# =============================================================================
+# Lints Configuration
+# =============================================================================
+
+[lints.rust]
+# Rust compiler lints
+unsafe_code = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+# Clippy lint groups
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+# Security-related lints - DENY (fail build)
+unwrap_used = "deny"
+expect_used = "deny"
+unimplemented = "deny"
+panic = "deny"
+
+# Code quality - warn
+cognitive_complexity = "warn"
+too_many_lines = "warn"
+todo = "warn"
+
+# Allow pedantic lints that are too noisy for this project
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+struct_excessive_bools = "allow"
+fn_params_excessive_bools = "allow"
+doc_markdown = "allow"
+wildcard_imports = "allow"
+similar_names = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_lossless = "allow"
+float_cmp = "allow"
+unnecessary_wraps = "allow"
+option_if_let_else = "allow"
+unused_self = "allow"
+needless_pass_by_value = "allow"
+redundant_pub_crate = "allow"
+significant_drop_tightening = "allow"
+multiple_crate_versions = "allow"

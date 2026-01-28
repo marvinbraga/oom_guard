@@ -32,18 +32,18 @@ pub enum KillResult {
 
 impl KillResult {
     /// Check if the kill operation was successful
-    pub fn is_success(&self) -> bool {
-        matches!(self, KillResult::Success | KillResult::AlreadyDead)
+    pub const fn is_success(&self) -> bool {
+        matches!(self, Self::Success | Self::AlreadyDead)
     }
 
     /// Get a human-readable description
     pub fn description(&self) -> &str {
         match self {
-            KillResult::Success => "successfully terminated",
-            KillResult::AlreadyDead => "already dead",
-            KillResult::PermissionDenied => "permission denied",
-            KillResult::NotFound => "not found",
-            KillResult::Error(msg) => msg,
+            Self::Success => "successfully terminated",
+            Self::AlreadyDead => "already dead",
+            Self::PermissionDenied => "permission denied",
+            Self::NotFound => "not found",
+            Self::Error(msg) => msg,
         }
     }
 }
@@ -62,7 +62,7 @@ fn send_signal(pid: i32, signal: Signal) -> Result<KillResult> {
             // Permission denied
             Ok(KillResult::PermissionDenied)
         }
-        Err(e) => Ok(KillResult::Error(format!("signal error: {}", e))),
+        Err(e) => Ok(KillResult::Error(format!("signal error: {e}"))),
     }
 }
 
@@ -83,16 +83,11 @@ fn is_process_alive(pid: i32) -> bool {
 /// # Returns
 /// Result containing the KillResult enum describing the outcome
 pub fn kill_process(pid: i32, strategy: KillStrategy, kill_group: bool) -> Result<KillResult> {
-    log::debug!(
-        "Attempting to kill process {} (strategy: {:?}, group: {})",
-        pid,
-        strategy,
-        kill_group
-    );
+    log::debug!("Attempting to kill process {pid} (strategy: {strategy:?}, group: {kill_group})");
 
     // Check if process exists before attempting to kill
     if !is_process_alive(pid) {
-        log::debug!("Process {} is already dead", pid);
+        log::debug!("Process {pid} is already dead");
         return Ok(KillResult::AlreadyDead);
     }
 
@@ -110,19 +105,17 @@ fn send_signal_to_target(pid: i32, signal: Signal, kill_group: bool) -> Result<K
         // Get the process group ID and kill the entire group
         match getpgid(Some(nix_pid)) {
             Ok(pgid) => {
-                log::debug!("Killing process group {} (leader pid {})", pgid, pid);
+                log::debug!("Killing process group {pgid} (leader pid {pid})");
                 match killpg(pgid, signal) {
                     Ok(()) => Ok(KillResult::Success),
                     Err(nix::errno::Errno::ESRCH) => Ok(KillResult::NotFound),
                     Err(nix::errno::Errno::EPERM) => Ok(KillResult::PermissionDenied),
-                    Err(e) => Ok(KillResult::Error(format!("killpg error: {}", e))),
+                    Err(e) => Ok(KillResult::Error(format!("killpg error: {e}"))),
                 }
             }
             Err(e) => {
                 log::warn!(
-                    "Failed to get process group for pid {}: {}. Falling back to single process kill.",
-                    pid,
-                    e
+                    "Failed to get process group for pid {pid}: {e}. Falling back to single process kill."
                 );
                 // Fall back to killing single process
                 send_signal(pid, signal)
@@ -135,7 +128,7 @@ fn send_signal_to_target(pid: i32, signal: Signal, kill_group: bool) -> Result<K
 
 /// Kill a process gracefully using SIGTERM
 fn kill_graceful(pid: i32, kill_group: bool) -> Result<KillResult> {
-    log::info!("Sending SIGTERM to process {} (group: {})", pid, kill_group);
+    log::info!("Sending SIGTERM to process {pid} (group: {kill_group})");
 
     let result = send_signal_to_target(pid, Signal::SIGTERM, kill_group)?;
 
@@ -158,16 +151,13 @@ fn kill_graceful(pid: i32, kill_group: bool) -> Result<KillResult> {
     }
 
     // Process didn't die after SIGTERM, escalate to SIGKILL
-    log::warn!(
-        "Process {} did not respond to SIGTERM, escalating to SIGKILL",
-        pid
-    );
+    log::warn!("Process {pid} did not respond to SIGTERM, escalating to SIGKILL");
     kill_forceful(pid, kill_group)
 }
 
 /// Kill a process forcefully using SIGKILL
 fn kill_forceful(pid: i32, kill_group: bool) -> Result<KillResult> {
-    log::info!("Sending SIGKILL to process {} (group: {})", pid, kill_group);
+    log::info!("Sending SIGKILL to process {pid} (group: {kill_group})");
 
     let result = send_signal_to_target(pid, Signal::SIGKILL, kill_group)?;
 
@@ -191,10 +181,7 @@ fn kill_forceful(pid: i32, kill_group: bool) -> Result<KillResult> {
 
     // Process should always die after SIGKILL, but check just in case
     if is_process_alive(pid) {
-        log::error!(
-            "Process {} still alive after SIGKILL - this should not happen!",
-            pid
-        );
+        log::error!("Process {pid} still alive after SIGKILL - this should not happen!");
         Ok(KillResult::Error("process survived SIGKILL".to_string()))
     } else {
         Ok(KillResult::Success)

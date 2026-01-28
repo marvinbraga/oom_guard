@@ -41,7 +41,7 @@ fn compile_safe_regex(pattern: &str) -> Result<Regex> {
     RegexBuilder::new(pattern)
         .size_limit(REGEX_SIZE_LIMIT)
         .build()
-        .context(format!("Invalid regex pattern: {}", pattern))
+        .context(format!("Invalid regex pattern: {pattern}"))
 }
 
 /// Parse threshold pair from string "WARN" or "WARN,KILL"

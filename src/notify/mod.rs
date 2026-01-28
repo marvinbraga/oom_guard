@@ -29,7 +29,7 @@ pub struct NotificationManager {
 }
 
 impl NotificationManager {
-    pub fn new(
+    pub const fn new(
         enable_dbus: bool,
         pre_kill_script: Option<String>,
         post_kill_script: Option<String>,
@@ -49,12 +49,9 @@ impl NotificationManager {
         score: i32,
     ) -> Result<()> {
         if let Some(script) = &self.pre_kill_script {
-            info!(
-                "Executing pre-kill script: {} for process {} ({})",
-                script, pid, name
-            );
+            info!("Executing pre-kill script: {script} for process {pid} ({name})");
             if let Err(e) = self.execute_script(script, pid, name, rss_kb, score) {
-                error!("Failed to execute pre-kill script: {}", e);
+                error!("Failed to execute pre-kill script: {e}");
             }
         }
         Ok(())
@@ -69,12 +66,9 @@ impl NotificationManager {
     ) -> Result<()> {
         // Execute post-kill script
         if let Some(script) = &self.post_kill_script {
-            info!(
-                "Executing post-kill script: {} for process {} ({})",
-                script, pid, name
-            );
+            info!("Executing post-kill script: {script} for process {pid} ({name})");
             if let Err(e) = self.execute_script(script, pid, name, rss_kb, score) {
-                error!("Failed to execute post-kill script: {}", e);
+                error!("Failed to execute post-kill script: {e}");
             }
         }
 
@@ -111,7 +105,13 @@ impl NotificationManager {
             .env("OOM_GUARD_SCORE", score.to_string())
             .output()?;
 
-        if !output.status.success() {
+        if output.status.success() {
+            info!("Script {script_path} executed successfully");
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if !stdout.is_empty() {
+                info!("Script output: {}", stdout.trim());
+            }
+        } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
             error!(
                 "Script {} failed with status {}: {}",
@@ -119,12 +119,6 @@ impl NotificationManager {
                 output.status,
                 stderr.trim()
             );
-        } else {
-            info!("Script {} executed successfully", script_path);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if !stdout.is_empty() {
-                info!("Script output: {}", stdout.trim());
-            }
         }
 
         Ok(())

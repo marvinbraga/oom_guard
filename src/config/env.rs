@@ -85,7 +85,7 @@ fn parse_bool(s: &str) -> Result<bool> {
     match s.to_lowercase().as_str() {
         "true" | "1" | "yes" | "on" => Ok(true),
         "false" | "0" | "no" | "off" => Ok(false),
-        _ => anyhow::bail!("Invalid boolean value: {}", s),
+        _ => anyhow::bail!("Invalid boolean value: {s}"),
     }
 }
 

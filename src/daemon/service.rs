@@ -14,26 +14,25 @@ use std::time::{Duration, Instant};
 
 /// Set daemon priority using the configured value
 fn set_daemon_priority(priority: i32) -> Result<()> {
-    // Set niceness to the specified value
+    // SAFETY: setpriority is a standard POSIX function. We pass valid arguments:
+    // - PRIO_PROCESS: adjust priority of current process
+    // - 0: target the calling process
+    // - priority: validated to be in range -20..=19 by Config::validate()
+    #[allow(unsafe_code)]
     let result = unsafe { setpriority(PRIO_PROCESS, 0, priority) };
 
     if result != 0 {
         let err = Error::last_os_error();
-        log::warn!(
-            "Failed to set niceness to {}: {}. May need root privileges.",
-            priority,
-            err
-        );
+        log::warn!("Failed to set niceness to {priority}: {err}. May need root privileges.");
     } else {
-        log::info!("Set daemon niceness to {} (priority)", priority);
+        log::info!("Set daemon niceness to {priority} (priority)");
     }
 
     // Set oom_score_adj to -100 (protect from OOM killer)
     match fs::write("/proc/self/oom_score_adj", "-100") {
-        Ok(_) => log::info!("Set oom_score_adj to -100 (protected from OOM killer)"),
+        Ok(()) => log::info!("Set oom_score_adj to -100 (protected from OOM killer)"),
         Err(e) => log::warn!(
-            "Failed to set oom_score_adj: {}. Daemon may be killed under extreme memory pressure.",
-            e
+            "Failed to set oom_score_adj: {e}. Daemon may be killed under extreme memory pressure."
         ),
     }
 
@@ -69,7 +68,7 @@ impl DaemonService {
         // Set daemon priority if requested
         if let Some(priority) = self.config.priority {
             if let Err(e) = set_daemon_priority(priority) {
-                log::error!("Failed to set daemon priority: {}", e);
+                log::error!("Failed to set daemon priority: {e}");
             }
         }
 
@@ -85,7 +84,7 @@ impl DaemonService {
         while self.running.load(Ordering::SeqCst) {
             // Check memory and act if needed
             if let Err(e) = self.check_and_act() {
-                log::error!("Error in main loop: {}", e);
+                log::error!("Error in main loop: {e}");
             }
 
             // Periodic status report
@@ -107,12 +106,12 @@ impl DaemonService {
         let running = Arc::clone(&self.running);
 
         // Handle SIGTERM and SIGINT
-        let r = running.clone();
+        let r = running;
         ctrlc::set_handler(move || {
             log::info!("Received shutdown signal");
             r.store(false, Ordering::SeqCst);
         })
-        .map_err(|e| anyhow!("Failed to set signal handler: {}", e))?;
+        .map_err(|e| anyhow!("Failed to set signal handler: {e}"))?;
 
         Ok(())
     }
@@ -181,7 +180,7 @@ impl DaemonService {
         }
 
         if let Some(priority) = self.config.priority {
-            log::info!("Daemon priority: {}", priority);
+            log::info!("Daemon priority: {priority}");
         }
 
         log::info!(
@@ -198,15 +197,17 @@ impl DaemonService {
     fn check_and_act(&mut self) -> Result<()> {
         let meminfo = MemInfo::read().context("Failed to read memory info")?;
 
-        log::debug!("Current memory status: {}", meminfo);
+        log::debug!("Current memory status: {meminfo}");
 
         // Check if we're in cooldown period after a recent kill
         if let Some(last_kill_time) = self.last_kill {
             let cooldown = Duration::from_secs(10); // 10 second cooldown
-            if last_kill_time.elapsed() < cooldown {
+            let elapsed = last_kill_time.elapsed();
+            if elapsed < cooldown {
+                let remaining = cooldown.saturating_sub(elapsed);
                 log::debug!(
                     "In cooldown period ({:.1}s remaining)",
-                    (cooldown - last_kill_time.elapsed()).as_secs_f64()
+                    remaining.as_secs_f64()
                 );
                 return Ok(());
             }
@@ -216,7 +217,7 @@ impl DaemonService {
         let kill_strategy = self.determine_kill_strategy(&meminfo)?;
 
         if let Some(strategy) = kill_strategy {
-            log::warn!("Memory threshold exceeded - using {:?} strategy", strategy);
+            log::warn!("Memory threshold exceeded - using {strategy:?} strategy");
 
             // Select victim process
             if let Some(victim) = self.select_victim()? {
@@ -313,20 +314,17 @@ impl DaemonService {
 
         // Select from preferred first, then candidates, then avoided
         if let Some(victim) = preferred.first() {
-            log::info!("Selected preferred victim: {}", victim);
+            log::info!("Selected preferred victim: {victim}");
             return Ok(Some(victim.clone()));
         }
 
         if let Some(victim) = candidates.first() {
-            log::info!("Selected candidate victim: {}", victim);
+            log::info!("Selected candidate victim: {victim}");
             return Ok(Some(victim.clone()));
         }
 
         if let Some(victim) = avoided.first() {
-            log::warn!(
-                "No candidates available, selecting from avoided: {}",
-                victim
-            );
+            log::warn!("No candidates available, selecting from avoided: {victim}");
             return Ok(Some(victim.clone()));
         }
 
@@ -446,7 +444,7 @@ impl DaemonService {
     fn report_status(&self) -> Result<()> {
         let meminfo = MemInfo::read().context("Failed to read memory info")?;
 
-        log::info!("Status Report: {}", meminfo);
+        log::info!("Status Report: {meminfo}");
 
         if let Some(last_kill_time) = self.last_kill {
             log::info!(

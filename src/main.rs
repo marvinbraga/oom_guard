@@ -19,18 +19,17 @@ fn main() {
     // Lock all current and future memory pages to prevent swapping
     // This ensures the daemon stays responsive even under memory pressure
     match mlockall(MlockAllFlags::MCL_CURRENT | MlockAllFlags::MCL_FUTURE) {
-        Ok(_) => log::info!("Memory locked successfully - daemon will not be swapped"),
-        Err(e) => log::warn!(
-            "Failed to lock memory: {}. Daemon may be slow under memory pressure.",
-            e
-        ),
+        Ok(()) => log::info!("Memory locked successfully - daemon will not be swapped"),
+        Err(e) => {
+            log::warn!("Failed to lock memory: {e}. Daemon may be slow under memory pressure.")
+        }
     }
 
     // Create configuration from arguments
     let config = match Config::from_args(args) {
         Ok(cfg) => cfg,
         Err(e) => {
-            eprintln!("Configuration error: {}", e);
+            eprintln!("Configuration error: {e}");
             eprintln!("Use --help for usage information");
             process::exit(1);
         }
@@ -38,7 +37,7 @@ fn main() {
 
     // Run the daemon
     if let Err(e) = daemon::run(config) {
-        eprintln!("Fatal error: {}", e);
+        eprintln!("Fatal error: {e}");
         process::exit(1);
     }
 }

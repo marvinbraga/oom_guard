@@ -25,10 +25,10 @@ impl MemInfo {
 
     /// Read memory information from a specific path (for testing)
     fn read_from_path(path: &str) -> Result<Self> {
-        let file = File::open(path).with_context(|| format!("Failed to open {}", path))?;
+        let file = File::open(path).with_context(|| format!("Failed to open {path}"))?;
         let reader = BufReader::new(file);
 
-        let mut info = MemInfo::default();
+        let mut info = Self::default();
 
         for line in reader.lines() {
             let line = line?;
@@ -41,7 +41,7 @@ impl MemInfo {
             let key = parts[0].trim_end_matches(':');
             let value: u64 = parts[1]
                 .parse()
-                .with_context(|| format!("Failed to parse value for {}", key))?;
+                .with_context(|| format!("Failed to parse value for {key}"))?;
 
             match key {
                 "MemTotal" => info.mem_total = value,
@@ -54,7 +54,7 @@ impl MemInfo {
 
         // Validate that we got all required fields
         if info.mem_total == 0 {
-            anyhow::bail!("Failed to read MemTotal from {}", path);
+            anyhow::bail!("Failed to read MemTotal from {path}");
         }
 
         Ok(info)
@@ -92,7 +92,7 @@ impl MemInfo {
     }
 
     /// Check if memory is below threshold (absolute KiB)
-    pub fn is_mem_below_threshold_kb(&self, threshold_kb: u64) -> bool {
+    pub const fn is_mem_below_threshold_kb(&self, threshold_kb: u64) -> bool {
         self.mem_available < threshold_kb
     }
 
@@ -102,7 +102,7 @@ impl MemInfo {
     }
 
     /// Check if swap is below threshold (absolute KiB)
-    pub fn is_swap_below_threshold_kb(&self, threshold_kb: u64) -> bool {
+    pub const fn is_swap_below_threshold_kb(&self, threshold_kb: u64) -> bool {
         self.swap_free < threshold_kb
     }
 
@@ -119,7 +119,7 @@ impl MemInfo {
         } else if kb >= KB {
             format!("{:.2} KiB", kb as f64 / KB as f64)
         } else {
-            format!("{} KiB", kb)
+            format!("{kb} KiB")
         }
     }
 }

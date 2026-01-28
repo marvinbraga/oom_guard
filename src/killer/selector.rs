@@ -14,7 +14,7 @@ pub struct ProcessSelector {
 
 impl ProcessSelector {
     /// Create a new process selector with the given configuration
-    pub fn new(config: Config) -> Self {
+    pub const fn new(config: Config) -> Self {
         Self { config }
     }
 
@@ -105,7 +105,7 @@ impl ProcessSelector {
                     p.rss_kb as i64
                 } else {
                     // Use OOM score (higher score = more likely to kill)
-                    p.oom_score as i64
+                    i64::from(p.oom_score)
                 };
 
                 // Boost score for preferred processes
