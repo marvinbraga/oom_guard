@@ -407,6 +407,18 @@ Designed for minimal system impact:
 
 ## 🔒 Security
 
+### Security Audit
+
+OOM Guard underwent a comprehensive security audit with the following protections:
+
+| Protection | Description |
+|------------|-------------|
+| **ReDoS Prevention** | Regex patterns limited to 256 chars with compiled size limits |
+| **Log Injection** | Process names sanitized before logging |
+| **Script Security** | Symlink detection and ownership validation for hooks |
+| **Env Var Sanitization** | Shell metacharacters removed from hook environment |
+| **Memory Safety** | Rust's ownership model prevents buffer overflows |
+
 ### Systemd Hardening
 
 The service file includes security measures:
@@ -595,12 +607,51 @@ docker run --privileged --pid=host \
 - [x] Process selection and killing
 - [x] Systemd integration
 - [x] Script hooks
-- [x] Multi-platform binaries
+- [x] Multi-platform binaries (x86_64, ARM64, musl)
+- [x] Security audit and hardening
+- [x] Comprehensive Clippy linting
 - [ ] Prometheus metrics exporter
 - [ ] Web dashboard
 - [ ] Machine learning-based prediction
 - [ ] Cgroup v2 integration
 - [ ] Windows support (via WSL2)
+
+---
+
+## 🛠️ Code Quality
+
+This project enforces strict code quality through comprehensive linting:
+
+### Clippy Lints
+
+```bash
+# Run linter (same as CI)
+cargo clippy
+
+# All warnings treated as errors in CI
+cargo clippy -- -D warnings
+```
+
+**Enforced Rules:**
+- `clippy::all` - All default lints
+- `clippy::pedantic` - Extra pedantic checks
+- `clippy::nursery` - Experimental improvements
+
+**Security Lints (DENY - Build fails):**
+- `unwrap_used` - Prevents panics from unwrap()
+- `expect_used` - Prevents panics from expect()
+- `panic` - Explicit panics not allowed
+- `unimplemented` - No unfinished code
+
+### Code Style
+
+```bash
+# Format code
+cargo fmt
+
+# Check formatting (CI)
+cargo fmt -- --check
+```
 
 ---
 
@@ -615,7 +666,7 @@ Contributions are welcome! Please:
    ```bash
    cargo test
    cargo fmt
-   cargo clippy
+   cargo clippy -- -D warnings
    ```
 5. Commit your changes (`git commit -m 'Add amazing feature'`)
 6. Push to the branch (`git push origin feature/amazing-feature`)
