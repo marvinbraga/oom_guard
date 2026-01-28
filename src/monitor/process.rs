@@ -48,7 +48,7 @@ impl ProcessInfo {
             pid,
             name: stat.comm,
             cmdline,
-            rss_kb: rss_kb as u64,
+            rss_kb,
             oom_score: oom_score as i32,
             uid,
         })

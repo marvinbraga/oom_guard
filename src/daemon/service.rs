@@ -3,9 +3,11 @@
 use crate::config::Config;
 use crate::killer::{kill_process, KillInfo, KillStrategy};
 use crate::monitor::{MemInfo, ProcessInfo};
+use crate::sanitize_for_log;
 use anyhow::{anyhow, Context, Result};
 use nix::libc::{setpriority, PRIO_PROCESS};
 use std::fs;
+use std::io::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -13,18 +15,26 @@ use std::time::{Duration, Instant};
 /// Set daemon priority using the configured value
 fn set_daemon_priority(priority: i32) -> Result<()> {
     // Set niceness to the specified value
-    unsafe {
-        if setpriority(PRIO_PROCESS, 0, priority) != 0 {
-            log::warn!("Failed to set niceness to {}. May need root privileges.", priority);
-        } else {
-            log::info!("Set daemon niceness to {} (priority)", priority);
-        }
+    let result = unsafe { setpriority(PRIO_PROCESS, 0, priority) };
+
+    if result != 0 {
+        let err = Error::last_os_error();
+        log::warn!(
+            "Failed to set niceness to {}: {}. May need root privileges.",
+            priority,
+            err
+        );
+    } else {
+        log::info!("Set daemon niceness to {} (priority)", priority);
     }
 
     // Set oom_score_adj to -100 (protect from OOM killer)
     match fs::write("/proc/self/oom_score_adj", "-100") {
         Ok(_) => log::info!("Set oom_score_adj to -100 (protected from OOM killer)"),
-        Err(e) => log::warn!("Failed to set oom_score_adj: {}. Daemon may be killed under extreme memory pressure.", e),
+        Err(e) => log::warn!(
+            "Failed to set oom_score_adj: {}. Daemon may be killed under extreme memory pressure.",
+            e
+        ),
     }
 
     Ok(())
@@ -364,13 +374,17 @@ impl DaemonService {
         log::warn!(
             "Killing process {} ({}) - RSS: {} KiB, Strategy: {:?}",
             victim.pid,
-            victim.name,
+            sanitize_for_log(&victim.name),
             victim.rss_kb,
             strategy
         );
 
         if self.config.dry_run {
-            log::info!("DRY RUN: Would kill process {} ({})", victim.pid, victim.name);
+            log::info!(
+                "DRY RUN: Would kill process {} ({})",
+                victim.pid,
+                sanitize_for_log(&victim.name)
+            );
             return Ok(());
         }
 
@@ -389,7 +403,7 @@ impl DaemonService {
             log::info!(
                 "Successfully killed process {} ({}): {}",
                 victim.pid,
-                victim.name,
+                sanitize_for_log(&victim.name),
                 result.description()
             );
 
@@ -400,7 +414,7 @@ impl DaemonService {
             log::error!(
                 "Failed to kill process {} ({}): {}",
                 victim.pid,
-                victim.name,
+                sanitize_for_log(&victim.name),
                 result.description()
             );
         }

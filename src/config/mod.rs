@@ -4,9 +4,45 @@ mod args;
 mod env;
 
 pub use args::Args;
-use anyhow::{Context, Result};
-use regex::Regex;
+use anyhow::{bail, Context, Result};
+use regex::{Regex, RegexBuilder};
 use std::time::Duration;
+
+/// Maximum allowed length for regex patterns to prevent ReDoS attacks
+const MAX_REGEX_PATTERN_LENGTH: usize = 256;
+
+/// Maximum compiled regex size in bytes (10MB) to prevent memory exhaustion
+const REGEX_SIZE_LIMIT: usize = 10 * (1 << 20);
+
+/// Compile a regex pattern with safety limits to prevent ReDoS attacks.
+///
+/// This function applies the following protections:
+/// - Limits pattern length to MAX_REGEX_PATTERN_LENGTH characters
+/// - Sets a compiled size limit to prevent memory exhaustion
+/// - Uses RegexBuilder with size_limit for additional protection
+///
+/// # Arguments
+/// * `pattern` - The regex pattern to compile
+///
+/// # Returns
+/// * `Ok(Regex)` - A safely compiled regex
+/// * `Err` - If the pattern is too long, invalid, or potentially dangerous
+fn compile_safe_regex(pattern: &str) -> Result<Regex> {
+    // Validate pattern length
+    if pattern.len() > MAX_REGEX_PATTERN_LENGTH {
+        bail!(
+            "Regex pattern too long (max {} chars): {}...",
+            MAX_REGEX_PATTERN_LENGTH,
+            &pattern[..50.min(pattern.len())]
+        );
+    }
+
+    // Compile with size limit to prevent ReDoS
+    RegexBuilder::new(pattern)
+        .size_limit(REGEX_SIZE_LIMIT)
+        .build()
+        .context(format!("Invalid regex pattern: {}", pattern))
+}
 
 /// Parse threshold pair from string "WARN" or "WARN,KILL"
 /// Returns (warn_threshold, kill_threshold)
@@ -131,15 +167,15 @@ impl Config {
         // Process selection
         config.sort_by_rss = args.sort_by_rss;
 
-        // Compile regex patterns
+        // Compile regex patterns with safety limits (ReDoS protection)
         for pattern in args.prefer {
-            config.prefer.push(Regex::new(&pattern)?);
+            config.prefer.push(compile_safe_regex(&pattern)?);
         }
         for pattern in args.avoid {
-            config.avoid.push(Regex::new(&pattern)?);
+            config.avoid.push(compile_safe_regex(&pattern)?);
         }
         for pattern in args.ignore {
-            config.ignore.push(Regex::new(&pattern)?);
+            config.ignore.push(compile_safe_regex(&pattern)?);
         }
 
         // Behavior flags
@@ -209,7 +245,7 @@ impl Config {
 
         // Validate priority range
         if let Some(priority) = self.priority {
-            if priority < -20 || priority > 19 {
+            if !(-20..=19).contains(&priority) {
                 anyhow::bail!("priority must be between -20 and 19");
             }
         }
@@ -251,6 +287,46 @@ impl Default for Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_compile_safe_regex_valid_pattern() {
+        let regex = compile_safe_regex("^firefox$").unwrap();
+        assert!(regex.is_match("firefox"));
+        assert!(!regex.is_match("firefox-esr"));
+    }
+
+    #[test]
+    fn test_compile_safe_regex_complex_but_safe_pattern() {
+        let regex = compile_safe_regex(r"chrome|chromium|google-chrome").unwrap();
+        assert!(regex.is_match("chrome"));
+        assert!(regex.is_match("chromium"));
+        assert!(regex.is_match("google-chrome"));
+    }
+
+    #[test]
+    fn test_compile_safe_regex_pattern_too_long() {
+        let long_pattern = "a".repeat(MAX_REGEX_PATTERN_LENGTH + 1);
+        let result = compile_safe_regex(&long_pattern);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("too long"));
+    }
+
+    #[test]
+    fn test_compile_safe_regex_invalid_pattern() {
+        let result = compile_safe_regex("[invalid");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Invalid regex pattern"));
+    }
+
+    #[test]
+    fn test_compile_safe_regex_max_length_boundary() {
+        // Pattern exactly at the limit should work
+        let pattern = "a".repeat(MAX_REGEX_PATTERN_LENGTH);
+        let result = compile_safe_regex(&pattern);
+        assert!(result.is_ok());
+    }
 
     #[test]
     fn test_parse_threshold_pair_single_value() {

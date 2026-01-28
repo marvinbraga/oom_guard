@@ -4,6 +4,9 @@ use crate::config::Config;
 use crate::monitor::ProcessInfo;
 use regex::Regex;
 
+#[cfg(test)]
+use regex::RegexBuilder;
+
 /// Process selector that applies filters and selects victims
 pub struct ProcessSelector {
     config: Config,
@@ -198,6 +201,14 @@ impl std::fmt::Display for ProcessStatistics {
 mod tests {
     use super::*;
 
+    /// Helper function to compile safe regex for tests (mirrors config::compile_safe_regex)
+    fn compile_test_regex(pattern: &str) -> Regex {
+        RegexBuilder::new(pattern)
+            .size_limit(10 * (1 << 20))
+            .build()
+            .unwrap()
+    }
+
     fn create_test_process(pid: i32, name: &str, cmdline: &str, rss_kb: u64, oom_score: i32) -> ProcessInfo {
         ProcessInfo {
             pid,
@@ -233,7 +244,7 @@ mod tests {
     #[test]
     fn test_ignore_pattern() {
         let mut config = Config::default();
-        config.ignore.push(Regex::new("^firefox$").unwrap());
+        config.ignore.push(compile_test_regex("^firefox$"));
 
         let selector = ProcessSelector::new(config);
 
@@ -247,7 +258,7 @@ mod tests {
     #[test]
     fn test_prefer_pattern() {
         let mut config = Config::default();
-        config.prefer.push(Regex::new("chrome").unwrap());
+        config.prefer.push(compile_test_regex("chrome"));
 
         let selector = ProcessSelector::new(config);
 
@@ -266,7 +277,7 @@ mod tests {
     #[test]
     fn test_avoid_pattern() {
         let mut config = Config::default();
-        config.avoid.push(Regex::new("important").unwrap());
+        config.avoid.push(compile_test_regex("important"));
 
         let selector = ProcessSelector::new(config);
 

@@ -10,7 +10,7 @@ use anyhow::Result;
 /// Run the OOM Guard daemon with the given configuration
 pub fn run(config: Config) -> Result<()> {
     // Initialize logger if not already initialized
-    if let Err(_) = env_logger::try_init() {
+    if env_logger::try_init().is_err() {
         log::warn!("Logger already initialized");
     }
 

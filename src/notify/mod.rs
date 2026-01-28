@@ -7,6 +7,21 @@ use std::process::Command;
 #[cfg(feature = "dbus-notify")]
 use notify_rust::{Notification, Timeout};
 
+/// Sanitize a string for safe use in environment variables and shell scripts
+fn sanitize_env_value(s: &str) -> String {
+    // Remove or replace potentially dangerous characters
+    s.chars()
+        .map(|c| match c {
+            // Allow alphanumeric, spaces, dots, hyphens, underscores
+            c if c.is_alphanumeric() => c,
+            ' ' | '.' | '-' | '_' | '/' => c,
+            // Replace control characters and shell metacharacters
+            _ => '_',
+        })
+        .take(256) // Limit length
+        .collect()
+}
+
 pub struct NotificationManager {
     enable_dbus: bool,
     pre_kill_script: Option<String>,
@@ -87,9 +102,11 @@ impl NotificationManager {
         rss_kb: u64,
         score: i32,
     ) -> Result<()> {
+        let safe_name = sanitize_env_value(name);
+
         let output = Command::new(script_path)
             .env("OOM_GUARD_PID", pid.to_string())
-            .env("OOM_GUARD_NAME", name)
+            .env("OOM_GUARD_NAME", &safe_name)
             .env("OOM_GUARD_RSS", rss_kb.to_string())
             .env("OOM_GUARD_SCORE", score.to_string())
             .output()?;
@@ -154,5 +171,42 @@ mod tests {
         );
         assert!(manager.pre_kill_script.is_some());
         assert!(manager.post_kill_script.is_some());
+    }
+
+    #[test]
+    fn test_sanitize_env_value_normal() {
+        assert_eq!(sanitize_env_value("firefox"), "firefox");
+        assert_eq!(sanitize_env_value("my-app"), "my-app");
+        assert_eq!(sanitize_env_value("app_v1.2"), "app_v1.2");
+        assert_eq!(sanitize_env_value("/usr/bin/app"), "/usr/bin/app");
+    }
+
+    #[test]
+    fn test_sanitize_env_value_shell_metacharacters() {
+        // Shell metacharacters should be replaced with underscore
+        assert_eq!(sanitize_env_value("$(whoami)"), "__whoami_");
+        assert_eq!(sanitize_env_value("`id`"), "_id_");
+        assert_eq!(sanitize_env_value("a;b"), "a_b");
+        assert_eq!(sanitize_env_value("a|b"), "a_b");
+        assert_eq!(sanitize_env_value("a&b"), "a_b");
+        assert_eq!(sanitize_env_value("a>b"), "a_b");
+        assert_eq!(sanitize_env_value("a<b"), "a_b");
+        assert_eq!(sanitize_env_value("a'b"), "a_b");
+        assert_eq!(sanitize_env_value("a\"b"), "a_b");
+        assert_eq!(sanitize_env_value("a\\nb"), "a_nb");
+    }
+
+    #[test]
+    fn test_sanitize_env_value_length_limit() {
+        let long_name = "a".repeat(500);
+        let sanitized = sanitize_env_value(&long_name);
+        assert_eq!(sanitized.len(), 256);
+    }
+
+    #[test]
+    fn test_sanitize_env_value_control_characters() {
+        assert_eq!(sanitize_env_value("a\nb"), "a_b");
+        assert_eq!(sanitize_env_value("a\tb"), "a_b");
+        assert_eq!(sanitize_env_value("a\0b"), "a_b");
     }
 }
